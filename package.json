@@ -1,0 +1,13 @@
+{
+  "name": "agente-suporte-meta",
+  "version": "1.0.0",
+  "description": "Agente de IA para responder comentarios e DMs do Instagram/Messenger",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "axios": "^1.7.7"
+  }
+}
