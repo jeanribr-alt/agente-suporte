@@ -14,7 +14,8 @@ app.use(express.json());
 
 // ---------- CONFIG (via variáveis de ambiente) ----------
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN; // você escolhe essa string
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // token que você gerou
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // token que você gerou (Instagram)
+const PAGE_ACCESS_TOKEN_FB = process.env.PAGE_ACCESS_TOKEN_FB; // token da Página (Facebook)
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GRAPH_API_VERSION = "v21.0";
 const GRAPH_BASE_URL = "https://graph.instagram.com"; // token IGAA exige esse domínio
@@ -64,8 +65,8 @@ app.post("/webhook", async (req, res) => {
         // --- Comentários (Instagram / Facebook) ---
         if (entry.changes) {
           for (const change of entry.changes) {
-            if (change.field === "comments") {
-              await handleComment(change.value);
+            if (change.field === "comments" || change.field === "feed") {
+              await handleComment(change.value, body.object);
             }
           }
         }
@@ -94,14 +95,19 @@ async function handleDirectMessage(event) {
 // ============================================
 // 4. LIDAR COM COMENTÁRIO
 // ============================================
-async function handleComment(value) {
-  const commentId = value.id;
-  const commentText = value.text;
-  const fromId = value.from?.id;
-  const fromUsername = value.from?.username;
+async function handleComment(value, source) {
+  // No Facebook, o campo "feed" cobre vários tipos de evento (posts, reações, etc.)
+  // Só processamos quando for de fato um comentário sendo adicionado.
+  if (source === "page" && (value.item !== "comment" || value.verb !== "add")) {
+    return;
+  }
 
-  // Evita responder aos próprios comentários do agente
-  if (!commentText || !fromId) return;
+  const commentId = value.comment_id || value.id;
+  const commentText = value.message || value.text;
+  const fromId = value.from?.id;
+  const fromUsername = value.from?.username || value.from?.name;
+
+  if (!commentText || !fromId || !commentId) return;
 
   const messageWithContext = fromUsername
     ? `[Comentário de @${fromUsername}]: ${commentText}`
@@ -122,10 +128,10 @@ async function handleComment(value) {
   }
 
   if (decision.action === "apagar") {
-    await deleteComment(commentId);
+    await deleteComment(commentId, source);
     console.log(`Comentário ${commentId} apagado (moderação).`);
   } else if (decision.action === "responder" && decision.message) {
-    await replyToComment(commentId, decision.message);
+    await replyToComment(commentId, decision.message, source);
   }
 }
 
@@ -186,20 +192,27 @@ async function sendDirectMessage(recipientId, text) {
 // ============================================
 // 7. ENVIAR RESPOSTA - COMENTÁRIO
 // ============================================
-async function replyToComment(commentId, text) {
+async function replyToComment(commentId, text, source) {
+  const baseUrl = source === "page" ? "https://graph.facebook.com" : GRAPH_BASE_URL;
+  const token = source === "page" ? PAGE_ACCESS_TOKEN_FB : PAGE_ACCESS_TOKEN;
+  const endpointSuffix = source === "page" ? "comments" : "replies";
+
   await axios.post(
-    `${GRAPH_BASE_URL}/${GRAPH_API_VERSION}/${commentId}/replies`,
+    `${baseUrl}/${GRAPH_API_VERSION}/${commentId}/${endpointSuffix}`,
     { message: text },
-    { params: { access_token: PAGE_ACCESS_TOKEN } }
+    { params: { access_token: token } }
   );
 }
 
 // ============================================
 // 8. APAGAR COMENTÁRIO (moderação)
 // ============================================
-async function deleteComment(commentId) {
-  await axios.delete(`${GRAPH_BASE_URL}/${GRAPH_API_VERSION}/${commentId}`, {
-    params: { access_token: PAGE_ACCESS_TOKEN },
+async function deleteComment(commentId, source) {
+  const baseUrl = source === "page" ? "https://graph.facebook.com" : GRAPH_BASE_URL;
+  const token = source === "page" ? PAGE_ACCESS_TOKEN_FB : PAGE_ACCESS_TOKEN;
+
+  await axios.delete(`${baseUrl}/${GRAPH_API_VERSION}/${commentId}`, {
+    params: { access_token: token },
   });
 }
 
