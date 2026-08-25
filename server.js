@@ -72,6 +72,9 @@ app.post("/webhook", async (req, res) => {
     }
   } catch (err) {
     console.error("Erro processando evento:", err.message);
+    if (err.response) {
+      console.error("Detalhes do erro (Meta):", JSON.stringify(err.response.data));
+    }
   }
 });
 
