@@ -98,11 +98,16 @@ async function handleComment(value) {
   const commentId = value.id;
   const commentText = value.text;
   const fromId = value.from?.id;
+  const fromUsername = value.from?.username;
 
   // Evita responder aos próprios comentários do agente
   if (!commentText || !fromId) return;
 
-  const reply = await askClaude(`comment_${commentId}`, commentText);
+  const messageWithContext = fromUsername
+    ? `[Comentário de @${fromUsername}]: ${commentText}`
+    : commentText;
+
+  const reply = await askClaude(`comment_${commentId}`, messageWithContext);
   await replyToComment(commentId, reply);
 }
 
