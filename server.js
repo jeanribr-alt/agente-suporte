@@ -17,6 +17,7 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN; // você escolhe essa string
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // token que você gerou
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GRAPH_API_VERSION = "v21.0";
+const GRAPH_BASE_URL = "https://graph.instagram.com"; // token IGAA exige esse domínio
 
 // Memória simples de conversa em RAM (troque por um banco depois, ex: Redis/Postgres)
 const conversationHistory = {}; // { senderId: [ {role, content}, ... ] }
@@ -150,7 +151,7 @@ async function askClaude(conversationKey, userMessage) {
 // ============================================
 async function sendDirectMessage(recipientId, text) {
   await axios.post(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages`,
+    `${GRAPH_BASE_URL}/${GRAPH_API_VERSION}/me/messages`,
     {
       recipient: { id: recipientId },
       message: { text },
@@ -164,7 +165,7 @@ async function sendDirectMessage(recipientId, text) {
 // ============================================
 async function replyToComment(commentId, text) {
   await axios.post(
-    `https://graph.facebook.com/${GRAPH_API_VERSION}/${commentId}/replies`,
+    `${GRAPH_BASE_URL}/${GRAPH_API_VERSION}/${commentId}/replies`,
     { message: text },
     { params: { access_token: PAGE_ACCESS_TOKEN } }
   );
