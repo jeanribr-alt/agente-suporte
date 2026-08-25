@@ -7,7 +7,7 @@
 
 const express = require("express");
 const axios = require("axios");
-const { SYSTEM_PROMPT } = require("./prompt");
+const { SYSTEM_PROMPT, COMMENT_MODERATION_INSTRUCTIONS } = require("./prompt");
 
 const app = express();
 app.use(express.json());
@@ -87,7 +87,7 @@ async function handleDirectMessage(event) {
   const userText = event.message.text;
   if (!userText) return; // ignora imagem/áudio por enquanto
 
-  const reply = await askClaude(senderId, userText);
+  const reply = await askClaude(senderId, userText, SYSTEM_PROMPT);
   await sendDirectMessage(senderId, reply);
 }
 
@@ -107,14 +107,32 @@ async function handleComment(value) {
     ? `[Comentário de @${fromUsername}]: ${commentText}`
     : commentText;
 
-  const reply = await askClaude(`comment_${commentId}`, messageWithContext);
-  await replyToComment(commentId, reply);
+  const rawReply = await askClaude(
+    `comment_${commentId}`,
+    messageWithContext,
+    SYSTEM_PROMPT + "\n" + COMMENT_MODERATION_INSTRUCTIONS
+  );
+
+  let decision;
+  try {
+    decision = JSON.parse(rawReply);
+  } catch (e) {
+    console.error("Não consegui interpretar a decisão da IA:", rawReply);
+    return;
+  }
+
+  if (decision.action === "apagar") {
+    await deleteComment(commentId);
+    console.log(`Comentário ${commentId} apagado (moderação).`);
+  } else if (decision.action === "responder" && decision.message) {
+    await replyToComment(commentId, decision.message);
+  }
 }
 
 // ============================================
 // 5. CHAMAR A API DO CLAUDE
 // ============================================
-async function askClaude(conversationKey, userMessage) {
+async function askClaude(conversationKey, userMessage, systemPrompt) {
   if (!conversationHistory[conversationKey]) {
     conversationHistory[conversationKey] = [];
   }
@@ -130,7 +148,7 @@ async function askClaude(conversationKey, userMessage) {
     {
       model: "claude-sonnet-5",
       max_tokens: 400,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: trimmedHistory,
     },
     {
@@ -174,6 +192,15 @@ async function replyToComment(commentId, text) {
     { message: text },
     { params: { access_token: PAGE_ACCESS_TOKEN } }
   );
+}
+
+// ============================================
+// 8. APAGAR COMENTÁRIO (moderação)
+// ============================================
+async function deleteComment(commentId) {
+  await axios.delete(`${GRAPH_BASE_URL}/${GRAPH_API_VERSION}/${commentId}`, {
+    params: { access_token: PAGE_ACCESS_TOKEN },
+  });
 }
 
 const PORT = process.env.PORT || 3000;
