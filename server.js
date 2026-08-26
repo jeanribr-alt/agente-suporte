@@ -96,7 +96,13 @@ async function handleDirectMessage(event) {
   if (!userText) return; // ignora imagem/áudio por enquanto
 
   const reply = await askClaude(senderId, userText, SYSTEM_PROMPT);
-  await sendDirectMessage(senderId, reply);
+
+  // Espera 3 minutos antes de responder, pra parecer mais humano
+  setTimeout(() => {
+    sendDirectMessage(senderId, reply).catch((err) =>
+      console.error("Erro enviando DM atrasada:", err.message)
+    );
+  }, 3 * 60 * 1000);
 }
 
 // ============================================
@@ -146,10 +152,16 @@ async function handleComment(value, source) {
   }
 
   if (decision.action === "apagar") {
+    // Apagar continua instantâneo — não precisa parecer humano nesse caso
     await deleteComment(commentId, source);
     console.log(`Comentário ${commentId} apagado (moderação).`);
   } else if (decision.action === "responder" && decision.message) {
-    await replyToComment(commentId, decision.message, source);
+    // Espera 3 minutos antes de responder, pra parecer mais humano
+    setTimeout(() => {
+      replyToComment(commentId, decision.message, source).catch((err) =>
+        console.error("Erro respondendo comentário atrasado:", err.message)
+      );
+    }, 3 * 60 * 1000);
   }
 }
 
