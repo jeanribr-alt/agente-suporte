@@ -20,8 +20,15 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GRAPH_API_VERSION = "v21.0";
 const GRAPH_BASE_URL = "https://graph.instagram.com"; // token IGAA exige esse domínio
 
+// IDs da própria conta/página — usados pra NUNCA responder a si mesmo (evita loop infinito)
+const OWN_IG_ID = "28657556597184544";
+const OWN_PAGE_ID = "1229123500284213";
+
 // Memória simples de conversa em RAM (troque por um banco depois, ex: Redis/Postgres)
 const conversationHistory = {}; // { senderId: [ {role, content}, ... ] }
+
+// Evita processar o mesmo comentário duas vezes (proteção extra contra reenvios do Meta)
+const processedComments = new Set();
 
 // ============================================
 // 1. VERIFICAÇÃO DO WEBHOOK (GET)
@@ -108,6 +115,17 @@ async function handleComment(value, source) {
   const fromUsername = value.from?.username || value.from?.name;
 
   if (!commentText || !fromId || !commentId) return;
+
+  // CRÍTICO: nunca processar comentário/resposta feito pelo próprio agente (evita loop infinito)
+  if (fromId === OWN_IG_ID || fromId === OWN_PAGE_ID) {
+    return;
+  }
+
+  // Evita reprocessar o mesmo comentário se o Meta reenviar o evento
+  if (processedComments.has(commentId)) {
+    return;
+  }
+  processedComments.add(commentId);
 
   const messageWithContext = fromUsername
     ? `[Comentário de @${fromUsername}]: ${commentText}`
